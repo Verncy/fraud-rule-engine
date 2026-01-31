@@ -1,0 +1,9 @@
+{
+  "transactionId": "tx-1001",
+  "customerId": "cust-77",
+  "amount": 12500.00,
+  "currency": "ZAR",
+  "merchant": "SUSPICIOUS_MERCHANT",
+  "category": "ELECTRONICS",
+  "eventTime": "2026-01-28T10:15:30Z"
+}

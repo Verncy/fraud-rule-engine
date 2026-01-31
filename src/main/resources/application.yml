@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/fraud
+    username: fraud
+    password: fraud
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false   # ✅ production-friendly (prevents lazy loading during web rendering)
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
