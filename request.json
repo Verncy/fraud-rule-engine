@@ -1,9 +1,9 @@
 {
-  "transactionId": "tx-1001",
-  "customerId": "cust-77",
-  "amount": 12500.00,
+  "transactionId": "tx-2002",
+  "customerId": "cust-004",
+  "amount": 35000,
   "currency": "ZAR",
-  "merchant": "SUSPICIOUS_MERCHANT",
-  "category": "ELECTRONICS",
-  "eventTime": "2026-01-28T10:15:30Z"
+  "merchant": "PUMA",
+  "category": "clothing",
+  "eventTime": "2026-02-01T02:30:00Z"
 }
