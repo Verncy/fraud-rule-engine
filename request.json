@@ -1,9 +1,9 @@
 {
-  "transactionId": "tx-2002",
-  "customerId": "cust-004",
-  "amount": 35000,
+  "transactionId": "tx-v4",
+  "customerId": "cust-velo",
+  "amount": 1000,
   "currency": "ZAR",
-  "merchant": "PUMA",
-  "category": "clothing",
-  "eventTime": "2026-02-01T02:30:00Z"
+  "merchant": "SAFE",
+  "category": "test",
+  "eventTime": "2026-02-03T19:07:00Z"
 }
