@@ -23,32 +23,36 @@ public class VelocityRule implements FraudRule {
         return Severity.HIGH;
     }
 
-    @Override 
-    public String id() { 
-        return "VELOCITY"; 
+    @Override
+    public String id() {
+        return "VELOCITY";
     }
 
-    @Override 
-    public String version() { 
-        return "1.0"; 
+    @Override
+    public String version() {
+        return "1.0";
     }
 
     @Override
     public Optional<RuleHit> evaluate(TransactionEvent event) {
-        
-
-        if (event.eventTime() == null || event.customerId() == null) {
+        if (event == null || event.customerId() == null || event.eventTime() == null) {
             return Optional.empty();
         }
 
-        OffsetDateTime since = event.eventTime().minusMinutes(windowMinutes);
+        OffsetDateTime end = event.eventTime();
+        OffsetDateTime start = end.minusMinutes(windowMinutes);
 
-        long count = transactionRepository.countByCustomerIdAndEventTimeGreaterThanEqual(
+        long count = transactionRepository.countByCustomerIdAndEventTimeBetween(
                 event.customerId(),
-                since
+                start,
+                end
         );
 
-        if (count <= maxCount) return Optional.empty();
+        // Because you save the transaction BEFORE evaluating rules, the count includes the current tx.
+        // So this rule triggers when the number of tx in the window is greater than maxCount.
+        if (count <= maxCount) {
+            return Optional.empty();
+        }
 
         return Optional.of(new RuleHit(
                 id(),
@@ -58,6 +62,8 @@ public class VelocityRule implements FraudRule {
                 java.util.Map.of(
                         "customerId", event.customerId(),
                         "windowMinutes", windowMinutes,
+                        "start", start.toString(),
+                        "end", end.toString(),
                         "count", count,
                         "maxCount", maxCount
                 )

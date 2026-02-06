@@ -1,9 +1,9 @@
 {
-  "transactionId": "tx-v4",
-  "customerId": "cust-velo",
-  "amount": 1000,
+  "transactionId": "tx-99",
+  "customerId": "cust-velo2",
+  "amount": 2050,
   "currency": "ZAR",
   "merchant": "SAFE",
   "category": "test",
-  "eventTime": "2026-02-03T19:07:00Z"
+  "eventTime": "2026-02-03T19:02:00Z"
 }

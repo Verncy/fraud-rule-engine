@@ -151,7 +151,6 @@ public class FraudEvaluationService {
         try {
             return objectMapper.valueToTree(o);
         } catch (Exception e) {
-            e.printStackTrace(); // TEMP - remove later
             return null;
         }
     }

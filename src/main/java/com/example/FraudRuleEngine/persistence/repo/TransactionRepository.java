@@ -7,7 +7,11 @@ import java.time.OffsetDateTime;
 import java.util.Optional;
 
 public interface TransactionRepository extends JpaRepository<TransactionEntity, Long> {
-    long countByCustomerIdAndEventTimeGreaterThanEqual(String customerId, OffsetDateTime since);
+    long countByCustomerIdAndEventTimeBetween(
+            String customerId,
+            OffsetDateTime start,
+            OffsetDateTime end
+    );
 
     Optional<TransactionEntity> findByTransactionId(String transactionId);
 }

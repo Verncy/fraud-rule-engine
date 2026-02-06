@@ -31,17 +31,22 @@ public class MerchantWatchlistRule implements FraudRule {
 
     @Override
     public Optional<RuleHit> evaluate(TransactionEvent event) {
-        if (event.merchant() == null) return Optional.empty();
+        if (event == null || event.merchant() == null) return Optional.empty();
 
-        String merchant = event.merchant().trim().toUpperCase();
-        if (!watchlist.contains(merchant)) return Optional.empty();
+        String original = event.merchant();
+        String normalized = original.trim().toUpperCase();
+
+        if (!watchlist.contains(normalized)) return Optional.empty();
 
         return Optional.of(new RuleHit(
                 id(),
                 version(),
                 severity(),
-                "Merchant is on watchlist: " + event.merchant(),
-                java.util.Map.of("merchant", event.merchant())
+                "Merchant is on watchlist: " + original,
+                Map.of(
+                        "merchant", original,
+                        "merchantNormalized", normalized
+                )
         ));
     }
 }
