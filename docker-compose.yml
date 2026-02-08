@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:16
+    container_name: fraud-db
     environment:
       POSTGRES_DB: fraud
       POSTGRES_USER: fraud
@@ -11,13 +12,13 @@ services:
       test: ["CMD-SHELL", "pg_isready -U fraud -d fraud"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 0
     volumes:
       - fraud_pgdata:/var/lib/postgresql/data
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+
+    image: fraud-rule-engine:local
+    container_name: fraud-app
     depends_on:
       db:
         condition: service_healthy
@@ -25,9 +26,16 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/fraud
       SPRING_DATASOURCE_USERNAME: fraud
       SPRING_DATASOURCE_PASSWORD: fraud
+      SPRING_FLYWAY_ENABLED: "true"
     ports:
       - "8081:8080"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
 
 volumes:
   fraud_pgdata:

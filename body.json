@@ -1,0 +1,9 @@
+﻿{
+  "transactionId": "tx-123",
+  "customerId": "cust-1",
+  "amount": 100.00,
+  "currency": "USD",
+  "merchant": "SAFE_MERCHANT",
+  "category": "RETAIL",
+  "eventTime": "2026-02-06T11:00:00Z"
+}

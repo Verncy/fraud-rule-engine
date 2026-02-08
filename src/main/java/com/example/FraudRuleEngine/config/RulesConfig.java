@@ -29,7 +29,7 @@ public class RulesConfig {
         return List.of(
             new HighAmountRule(HIGH_AMOUNT_THRESHOLD),
             new MerchantWatchlistRule(MERCHANT_WATCHLIST),
-            new VelocityRule(transactionRepository, VELOCITY_WINDOW_MINUTES, VELOCITY_MAX_TX_PER_WINDOW)
+            new VelocityRule(transactionRepository, VELOCITY_MAX_TX_PER_WINDOW, VELOCITY_WINDOW_MINUTES)
         );
     }
 

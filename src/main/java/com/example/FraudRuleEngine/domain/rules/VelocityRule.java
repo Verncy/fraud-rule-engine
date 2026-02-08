@@ -4,18 +4,20 @@ import com.example.FraudRuleEngine.domain.model.TransactionEvent;
 import com.example.FraudRuleEngine.persistence.repo.TransactionRepository;
 
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.Optional;
 
 public class VelocityRule implements FraudRule {
 
     private final TransactionRepository transactionRepository;
-    private final int windowMinutes;
     private final int maxCount;
+    private final int windowMinutes;
 
-    public VelocityRule(TransactionRepository transactionRepository, int windowMinutes, int maxCount) {
+    //  Correct constructor order: (repo, maxCount, windowMinutes)
+    public VelocityRule(TransactionRepository transactionRepository, int maxCount, int windowMinutes) {
         this.transactionRepository = transactionRepository;
-        this.windowMinutes = windowMinutes;
         this.maxCount = maxCount;
+        this.windowMinutes = windowMinutes;
     }
 
     @Override
@@ -35,10 +37,6 @@ public class VelocityRule implements FraudRule {
 
     @Override
     public Optional<RuleHit> evaluate(TransactionEvent event) {
-        if (event == null || event.customerId() == null || event.eventTime() == null) {
-            return Optional.empty();
-        }
-
         OffsetDateTime end = event.eventTime();
         OffsetDateTime start = end.minusMinutes(windowMinutes);
 
@@ -48,25 +46,26 @@ public class VelocityRule implements FraudRule {
                 end
         );
 
-        // Because you save the transaction BEFORE evaluating rules, the count includes the current tx.
-        // So this rule triggers when the number of tx in the window is greater than maxCount.
-        if (count <= maxCount) {
-            return Optional.empty();
+        // Trigger ONLY when count EXCEEDS maxCount
+        if (count > maxCount) {
+            return Optional.of(new RuleHit(
+                    id(),
+                    version(),
+                    severity(),
+                    String.format(
+                    "Velocity threshold exceeded: %d transactions in last %d minutes (max %d)",
+                            count, windowMinutes, maxCount ),
+                    Map.of(
+                            "customerId", event.customerId(),
+                            "windowMinutes", windowMinutes,
+                            "start", start.toString(),
+                            "end", end.toString(),
+                            "count", count,
+                            "maxCount", maxCount
+                    )
+            ));
         }
 
-        return Optional.of(new RuleHit(
-                id(),
-                version(),
-                severity(),
-                "Too many transactions in " + windowMinutes + " minutes for customer " + event.customerId(),
-                java.util.Map.of(
-                        "customerId", event.customerId(),
-                        "windowMinutes", windowMinutes,
-                        "start", start.toString(),
-                        "end", end.toString(),
-                        "count", count,
-                        "maxCount", maxCount
-                )
-        ));
+        return Optional.empty();
     }
 }

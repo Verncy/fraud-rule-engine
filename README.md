@@ -28,7 +28,7 @@ This project uses Docker Compose for PostgreSQL and a Dockerfile for the applica
 
 From the project root:
 
-```powershell
+```bash
 docker compose up --build -d
 ```
 
@@ -50,25 +50,25 @@ Database Details:
 
 API is exposed on:
 
-```
+```json
 http://localhost:8081
 ```
 
 ### 2. Verify Health
 
-```
+```bash
 curl.exe http://localhost:8081/actuator/health
 ```
 
 Expected:
 
-```
+```json
 {"status":"UP"}
 ```
 
 ### 3. Evaluate a transaction
 
-```
+```bash
 curl.exe -i -X POST "http://localhost:8081/v1/transactions/evaluate" `
   -H "Content-Type: application/json" `
   --data-binary "@request.json"
@@ -77,14 +77,14 @@ curl.exe -i -X POST "http://localhost:8081/v1/transactions/evaluate" `
 
 ### 4. View Logs:
 
-```
+```bash
 docker compose logs -f app
 
 ```
 
 ### 5. Stop / cleanup
 
-```
+```bash
 docker compose down
 ```
 
@@ -92,14 +92,14 @@ docker compose down
 
 ## Run locally
 
-```
+```bash
 docker compose up -d db
 ./mvnw spring-boot:run
 ```
 
 Service starts at:
 
-```
+```json
 http://localhost:8080
 ```
 (Note: Docker mode exposes the API on port 8081; local mode uses 8080.)
@@ -240,6 +240,158 @@ This enables auditability and debugging.
 
 ---
 
+## API Reference
+
+Base path: /v1
+Content-Type: application/json
+
+### 1. Evaluate a transaction
+
+Endpoint
+
+```bash
+POST /v1/transactions/evaluate
+```
+
+Description
+Evaluates a transaction against configured fraud rules and returns a risk assessment.
+
+Example request
+
+```bash
+curl -i -X POST http://localhost:8081/v1/transactions/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transactionId": "tx-99",
+    "amount": 12500,
+    "currency": "ZAR",
+    "merchantId": "merchant-001",
+    "customerId": "customer-123"
+  }'
+```
+
+Sample success response (200 OK)
+```json
+{
+  "transactionId": "tx-99",
+  "flagged": false,
+  "riskScore": 0,
+  "ruleHits": []
+}
+```
+
+### 2. Retrieve a case by transaction ID
+
+Endpoint
+```bash
+GET /v1/cases/{transactionId}
+```
+
+Validation
+
+- transactionId must not be blank
+
+- Max length: 64 characters
+
+Example request
+```bash
+curl -i http://localhost:8081/v1/cases/tx-99
+```
+
+Sample success response (200 OK)
+```json
+{
+  "transactionId": "tx-99",
+  "flagged": false,
+  "riskScore": 0,
+  "ruleHits": []
+}
+```
+
+### 3. Validation error example
+
+Invalid transaction ID (blank)
+```bash
+curl -i http://localhost:8081/v1/cases/
+```
+
+Sample error response (400 Bad Request)
+```json
+{
+  "timestamp": "2026-02-07T17:30:00Z",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Validation failed",
+  "path": "/v1/cases/",
+  "fieldErrors": [
+    {
+      "field": "transactionId",
+      "message": "transactionId is required"
+    }
+  ]
+}
+```
+
+---
+
+## API Example
+
+### 1. Evaluate a transaction (example)
+
+```bash
+curl -i -X POST http://localhost:8081/api/v1/fraud/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transactionId": "TX-1001",
+    "amount": 12500.00,
+    "currency": "ZAR",
+    "merchantId": "M-7788",
+    "customerId": "C-9911",
+    "timestamp": "2026-02-07T17:00:00+02:00"
+  }'
+```
+
+Sample success response (200):
+
+```json
+{
+  "transactionId": "TX-1001",
+  "decision": "REVIEW",
+  "reasons": ["HIGH_AMOUNT"],
+  "riskScore": 0.78
+}
+```
+
+### 2. Invlaid request example (validation failure)
+
+```bash
+curl -i -X POST http://localhost:8081/api/v1/fraud/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transactionId": "",
+    "amount": -5
+  }'
+```
+
+Sample error Response (404):
+
+```json
+{
+  "timestamp": "2026-02-07T17:20:00+02:00",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Validation failed",
+  "path": "/api/v1/fraud/evaluate",
+  "fieldErrors": [
+    { "field": "transactionId", "message": "must not be blank" },
+    { "field": "amount", "message": "must be greater than 0" }
+  ]
+}
+```
+
+---
+
+
 ## Validation & Errors
 
 Incoming requests are validated using Bean Validation (jakarta.validation).
@@ -258,7 +410,7 @@ The request DTO applies constraints such as:
 
 Validation is enforced on the evaluate endpoint via @Valid.
 
-Error responses (HTTP 400)
+**Error responses (HTTP 400)**
 
 If validation fails, the API returns HTTP 400 Bad Request with a JSON response that includes:
 
@@ -267,7 +419,7 @@ If validation fails, the API returns HTTP 400 Bad Request with a JSON response t
 - a list of field-level errors
 
 Example:
-
+```json
 {
   "timestamp": "2026-02-03T18:52:58Z",
   "status": 400,
@@ -278,7 +430,7 @@ Example:
     "amount: amount must be greater than 0"
   ]
 }
-
+```
 Notes:
 
 - The errors array contains one entry per invalid field.
@@ -291,7 +443,7 @@ Notes:
 
 A demo PowerShell script is included:
 
-```powershell
+```bash
 powershell -ExecutionPolicy Bypass -File .\scripts\demo.ps1
 ```
 
@@ -339,7 +491,7 @@ Expected results:
 
 To clear demo data while keeping schema:
 
-```powershell
+```bash
 powershell -ExecutionPolicy Bypass -File .\scripts\reset-db.ps1
 ```
 

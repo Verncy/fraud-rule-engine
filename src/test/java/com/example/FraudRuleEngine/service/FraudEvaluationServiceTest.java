@@ -11,6 +11,8 @@ import com.example.FraudRuleEngine.persistence.repo.TransactionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
+import com.example.FraudRuleEngine.service.events.FraudFlaggedEvent;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -19,6 +21,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class FraudEvaluationServiceTest {
@@ -28,11 +31,12 @@ class FraudEvaluationServiceTest {
         // Arrange
         TransactionRepository txRepo = mock(TransactionRepository.class);
         FraudCaseRepository caseRepo = mock(FraudCaseRepository.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
 
         List<FraudRule> rules = List.of(new HighAmountRule(new BigDecimal("50000")));
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
-        FraudEvaluationService service = new FraudEvaluationService(rules, txRepo, caseRepo, objectMapper);
+        FraudEvaluationService service = new FraudEvaluationService(rules, txRepo, caseRepo, objectMapper, publisher);
 
         String txId = "tx-test-" + UUID.randomUUID().toString().substring(0, 8);
 
@@ -76,5 +80,13 @@ class FraudEvaluationServiceTest {
         assertTrue(savedCase.isFlagged());
         assertEquals(1, savedCase.getRuleHits().size());
         assertEquals("HIGH_AMOUNT", savedCase.getRuleHits().get(0).getRuleId());
+
+        // Verify PagerDuty / monitoring event was published
+        ArgumentCaptor<FraudFlaggedEvent> eventCaptor = ArgumentCaptor.forClass(FraudFlaggedEvent.class);
+        verify(publisher).publishEvent(eventCaptor.capture());
+        assertEquals(txId, eventCaptor.getValue().transactionId());
+        assertEquals(70, eventCaptor.getValue().riskScore());
+
+
     }
 }

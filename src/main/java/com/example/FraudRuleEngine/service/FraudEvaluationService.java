@@ -14,8 +14,12 @@ import com.example.FraudRuleEngine.persistence.repo.FraudCaseRepository;
 import com.example.FraudRuleEngine.persistence.repo.TransactionRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.annotation.Transactional;
+import com.example.FraudRuleEngine.service.events.FraudFlaggedEvent;
 
-import jakarta.transaction.Transactional;
+
+// import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -26,7 +30,7 @@ public class FraudEvaluationService {
     private final List<FraudRule> rules;
     private final TransactionRepository transactionRepository;
     private final FraudCaseRepository fraudCaseRepository;
-
+    private final ApplicationEventPublisher publisher;
     private final ObjectMapper objectMapper;
 
 
@@ -34,12 +38,14 @@ public class FraudEvaluationService {
             List<FraudRule> rules,
             TransactionRepository transactionRepository,
             FraudCaseRepository fraudCaseRepository,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            ApplicationEventPublisher publisher
     ) {
         this.rules = rules;
         this.transactionRepository = transactionRepository;
         this.fraudCaseRepository = fraudCaseRepository;
         this.objectMapper = objectMapper;
+        this.publisher = publisher;
     }
 
     @Transactional
@@ -105,6 +111,21 @@ public class FraudEvaluationService {
         }
 
         fraudCase = fraudCaseRepository.save(fraudCase);
+
+        // Publish event for monitoring/alerting (PagerDuty listener will consume this)
+        if (flagged) {
+            publisher.publishEvent(new FraudFlaggedEvent(
+                request.transactionId(),
+                riskScore,
+                request.customerId(),
+                request.merchant(),
+                request.currency(),
+                request.amount(),
+                request.eventTime(),
+                hits.stream().map(RuleHit::ruleId).toList()
+            ));
+        }
+
 
         return mapToResponse(fraudCase);
     }

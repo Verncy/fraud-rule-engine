@@ -1,4 +1,27 @@
-target
-.git
-.idea
+# Build output
+target/
+build/
+
+# IDEs
+.idea/
+.vscode/
 *.iml
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Logs
+*.log
+
+# Test reports
+**/surefire-reports/
+**/failsafe-reports/
+
+# Misc
+*.tmp
+*.swp
