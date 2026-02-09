@@ -121,14 +121,24 @@ The system is designed to remain stateless at the application layer to support h
 
 ```mermaid
 flowchart LR
-    C[API Client] -->|POST /v1/transactions/evaluate| API[REST Controller]
-    API --> S[FraudEvaluationService]
-    S --> R[Rules Engine]
-    S --> DB[(PostgreSQL)]
-    S -->|Publish FraudFlaggedEvent - flagged only| EVT[Spring Events]
-    EVT --> L[FraudFlaggedListener]
-    L --> M[MonitoringClient]
-    M -->|WEBHOOK / SLACK / PAGERDUTY| EXT[External Alerting Endpoint]
+    Client --> API
+    API --> Service
+    Service --> Rules
+    Service --> DB
+    Service --> EventBus
+    EventBus --> Listener
+    Listener --> Monitoring
+    Monitoring --> External
+
+    Client[API Client]
+    API[Transactions Controller]
+    Service[Fraud Evaluation Service]
+    Rules[Rule Engine]
+    DB[(PostgreSQL)]
+    EventBus[Spring Event Bus]
+    Listener[Fraud Flagged Listener]
+    Monitoring[Monitoring Client]
+    External[Webhook / PagerDuty / Slack]
 ```
 
 Each transaction is persisted first, then evaluated.  
@@ -138,7 +148,7 @@ Rule hits and fraud cases are stored atomically in a single transaction.
 
 This diagram shows the high-level structure of the Fraud Rule Engine service and its integrations.
 
-![System Architecture](docs/diagrams/FraudRuleEngine_System_Architecture.png)
+![System Architecture](docs/diagrams/FraudRuleEngine_System_Architecture.drawio.png)
 
 
 ### Fraud Detection Event Flow
@@ -154,13 +164,13 @@ Transaction Event
                         → MonitoringClient
                             → Webhook / PagerDuty / Slack
 
-![Fraud Event Flow](docs/diagrams/FraudRuleEngine_Fraud_Event_Flow.png)
+![Fraud Event Flow](docs/diagrams/FraudRuleEngine_Fraud_Event_Flow.drawio.png)
 
 ### Deployment Architecture
 
 This diagram illustrates how the Fraud Rule Engine is deployed and how its components interact within a containerized environment.
 
-![Deployment Architecture](docs/diagrams/FraudRuleEngine_Deployment_Architecture.png)
+![Deployment Architecture](docs/diagrams/FraudRuleEngine_Deployment_Architecture.drawio.png)
 
 
 ---
