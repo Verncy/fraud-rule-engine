@@ -2,13 +2,24 @@
 # How to run: powershell -ExecutionPolicy Bypass -File .\scripts\demo.ps1
 # Ensure script is run from project root
 
-$baseUrl = "http://localhost:8080/v1/transactions/evaluate"
+# Auto-detect API base URL (Docker mode = 8081, local mode = 8080)
+$baseUrl = "http://localhost:8081"
+try {
+  Invoke-RestMethod "$baseUrl/actuator/health" -TimeoutSec 2 | Out-Null
+} catch {
+  $baseUrl = "http://localhost:8080"
+}
+
+Write-Host "Using API baseUrl = $baseUrl"
+
+# Build the evaluate endpoint once (do NOT overwrite $baseUrl)
+$evaluateUrl = "$baseUrl/v1/transactions/evaluate"
 $headers = @{ "Content-Type" = "application/json" }
 
 function Post-Tx($body) {
   $json = $body | ConvertTo-Json -Depth 10
-  $resp = Invoke-RestMethod -Method Post -Uri $baseUrl -Headers $headers -Body $json
-  $resp | ConvertTo-Json -Depth 10
+  $resp = Invoke-RestMethod -Method Post -Uri $evaluateUrl -Headers $headers -Body $json
+  return ($resp | ConvertTo-Json -Depth 10)
 }
 
 Write-Host "`n=== 1) HIGH AMOUNT ==="

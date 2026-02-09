@@ -12,7 +12,7 @@ This project supports two execution modes:
 
 ## Tech
 
-- Java 17  
+- Java 21 
 - Spring Boot  
 - PostgreSQL  
 - Flyway  
@@ -109,7 +109,7 @@ http://localhost:8080
 
 ## Architecture Overview
 
-This service follows a layered architecture:
+The system is designed to remain stateless at the application layer to support horizontal scaling behind a load balancer. This service follows a layered architecture:
 
 - API layer receives transaction events
 - Domain layer evaluates fraud rules
@@ -117,16 +117,94 @@ This service follows a layered architecture:
 - PostgreSQL is used for durable storage
 - Flyway manages schema migrations
 
-Flow:
+### High-level flow
 
-Client  
-→ REST Controller  
-→ FraudEvaluationService  
-→ Rules Engine  
-→ PostgreSQL  
+```mermaid
+flowchart LR
+  C[API Client] -->|POST /v1/transactions/evaluate| API[REST Controller]
+  API --> S[FraudEvaluationService]
+  S --> R[Rules Engine]
+  S --> DB[(PostgreSQL)]
+  S -->|publish FraudFlaggedEvent (flagged only)| EVT[(Spring Events)]
+  EVT --> L[FraudFlaggedListener]
+  L --> M[MonitoringClient]
+  M -->|WEBHOOK/SLACK/PAGERDUTY| EXT[External alerting endpoint]
+```
 
 Each transaction is persisted first, then evaluated.  
 Rule hits and fraud cases are stored atomically in a single transaction.
+
+### System Architecture
+
+This diagram shows the high-level structure of the Fraud Rule Engine service and its integrations.
+
+![System Architecture](docs/diagrams/FraudRuleEngine_System_Architecture.png)
+
+
+### Fraud Detection Event Flow
+
+This diagram illustrates how a transaction is evaluated and how flagged events are emitted to the monitoring layer.
+
+Transaction Event
+    → Fraud Rules Evaluation
+        → Risk Score Calculation
+            → Flag Decision
+                → FraudFlaggedEvent
+                    → FraudFlaggedListener
+                        → MonitoringClient
+                            → Webhook / PagerDuty / Slack
+
+![Fraud Event Flow](docs/diagrams/FraudRuleEngine_Fraud_Event_Flow.png)
+
+### Deployment Architecture
+
+This diagram illustrates how the Fraud Rule Engine is deployed and how its components interact within a containerized environment.
+
+![Deployment Architecture](docs/diagrams/FraudRuleEngine_Deployment_Architecture.png)
+
+
+---
+
+## Monitoring / Alerting
+
+When a transaction is **flagged**, `FraudEvaluationService` publishes a `FraudFlaggedEvent`.
+`FraudFlaggedListener` consumes the event **after the DB transaction commits** (`AFTER_COMMIT`) and calls `MonitoringClient`.
+
+For this take-home, the recommended demo path is **WEBHOOK** (works with webhook.site), but the abstraction supports Slack and PagerDuty as well. Alerts are emitted asynchronously to avoid increasing API latency.
+
+### Configuration (environment variables)
+
+| Variable                 | Meaning                             | Default             |
+|--------------------------|-------------------------------------|---------------------|
+| `ALERT_ENABLED`          | Enable/disable alerts               | `true`              |
+| `ALERT_PROVIDER`         | `WEBHOOK` \| `SLACK` \| `PAGERDUTY` | `WEBHOOK`           |
+| `ALERT_WEBHOOK_URL`      | Destination URL for WEBHOOK/SLACK   | *(blank)*           |
+| `ALERT_SOURCE`           | Source field for alert payload      | `fraud-rule-engine` |
+| `ALERT_SEVERITY_HIGH`    | Severity for flagged cases          | `critical`          |
+| `PAGERDUTY_ROUTING_KEY`  | PagerDuty Events API key (optional) | *(blank)*           |
+
+If `ALERT_WEBHOOK_URL` is blank, `MonitoringClient` uses a **demo fallback webhook.site URL** (documented in code) to keep local testing simple.
+
+### Example webhook payload
+
+```json
+{
+  "source": "fraud-rule-engine",
+  "severity": "critical",
+  "summary": "FLAGGED fraud case: tx=... riskScore=... merchant=... amount=... ...",
+  "details": {
+    "transactionId": "tx-high-123",
+    "riskScore": 100,
+    "anyHigh": true,
+    "customerId": "cust-1",
+    "merchant": "SHOPRITE",
+    "amount": 70000,
+    "currency": "ZAR",
+    "eventTime": "2026-02-01T10:00:00Z",
+    "ruleIds": ["HIGH_AMOUNT", "VELOCITY"]
+  }
+}
+```
 
 ---
 
@@ -244,6 +322,8 @@ This enables auditability and debugging.
 
 Base path: /v1
 Content-Type: application/json
+All endpoints are versioned under /v1 to support backward-compatible future changes.
+
 
 ### 1. Evaluate a transaction
 
@@ -265,8 +345,10 @@ curl -i -X POST http://localhost:8081/v1/transactions/evaluate \
     "transactionId": "tx-99",
     "amount": 12500,
     "currency": "ZAR",
-    "merchantId": "merchant-001",
-    "customerId": "customer-123"
+    "merchant": "merchant-001",
+    "customerId": "customer-123",
+    "category": "groceries",
+    "eventTime": "2026-02-01T10:00:00Z"
   }'
 ```
 
@@ -331,23 +413,29 @@ Sample error response (400 Bad Request)
   ]
 }
 ```
+---
+
+## Swagger / OpenAPI (optional)
+
+Swagger/OpenAPI was briefly introduced using springdoc-openapi, but it is currently disabled to keep the submission stable and focused on core functionality.
 
 ---
 
-## API Example
+### Quick Test Example 
 
 ### 1. Evaluate a transaction (example)
 
 ```bash
-curl -i -X POST http://localhost:8081/api/v1/fraud/evaluate \
+curl -i -X POST http://localhost:8081/v1/transactions/evaluate \
   -H "Content-Type: application/json" \
   -d '{
     "transactionId": "TX-1001",
     "amount": 12500.00,
     "currency": "ZAR",
-    "merchantId": "M-7788",
+    "merchant": "SHOPRITE",
     "customerId": "C-9911",
-    "timestamp": "2026-02-07T17:00:00+02:00"
+    "category": "groceries",
+    "eventTime": "2026-02-07T17:00:00Z"
   }'
 ```
 
@@ -356,16 +444,16 @@ Sample success response (200):
 ```json
 {
   "transactionId": "TX-1001",
-  "decision": "REVIEW",
-  "reasons": ["HIGH_AMOUNT"],
-  "riskScore": 0.78
+  "flagged": false,
+  "riskScore": 0,
+  "ruleHits": []
 }
 ```
 
-### 2. Invlaid request example (validation failure)
+### 2. Invalid request example (validation failure)
 
 ```bash
-curl -i -X POST http://localhost:8081/api/v1/fraud/evaluate \
+curl -i -X POST http://localhost:8081/v1/transactions/evaluate \
   -H "Content-Type: application/json" \
   -d '{
     "transactionId": "",
@@ -373,19 +461,14 @@ curl -i -X POST http://localhost:8081/api/v1/fraud/evaluate \
   }'
 ```
 
-Sample error Response (404):
+Sample error response (400):
 
 ```json
 {
   "timestamp": "2026-02-07T17:20:00+02:00",
   "status": 400,
   "error": "Bad Request",
-  "message": "Validation failed",
-  "path": "/api/v1/fraud/evaluate",
-  "fieldErrors": [
-    { "field": "transactionId", "message": "must not be blank" },
-    { "field": "amount", "message": "must be greater than 0" }
-  ]
+  "message": "Validation failed"
 }
 ```
 

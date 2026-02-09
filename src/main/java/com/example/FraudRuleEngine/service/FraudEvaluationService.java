@@ -12,27 +12,28 @@ import com.example.FraudRuleEngine.persistence.entity.RuleHitEntity;
 import com.example.FraudRuleEngine.persistence.entity.TransactionEntity;
 import com.example.FraudRuleEngine.persistence.repo.FraudCaseRepository;
 import com.example.FraudRuleEngine.persistence.repo.TransactionRepository;
+import com.example.FraudRuleEngine.service.events.FraudFlaggedEvent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.transaction.annotation.Transactional;
-import com.example.FraudRuleEngine.service.events.FraudFlaggedEvent;
-
-
-// import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
 public class FraudEvaluationService {
 
+    private static final Logger log = LoggerFactory.getLogger(FraudEvaluationService.class);
+
     private final List<FraudRule> rules;
     private final TransactionRepository transactionRepository;
     private final FraudCaseRepository fraudCaseRepository;
     private final ApplicationEventPublisher publisher;
     private final ObjectMapper objectMapper;
-
 
     public FraudEvaluationService(
             List<FraudRule> rules,
@@ -50,94 +51,108 @@ public class FraudEvaluationService {
 
     @Transactional
     public EvaluateResponse evaluate(TransactionEventRequest request) {
+        MDC.put("transactionId", request.transactionId());
+        try {
+            log.info("Evaluate transaction request received customerId={} merchant={} amount={} {} category={}",
+                    request.customerId(), request.merchant(), request.amount(), request.currency(), request.category());
 
-        // Idempotency: if already evaluated, return stored result
-        var existing = fraudCaseRepository.findByTransaction_TransactionId(request.transactionId());
-        if (existing.isPresent()) {
-            return mapToResponse(existing.get());
+            // Idempotency: if already evaluated, return stored result
+            var existing = fraudCaseRepository.findByTransaction_TransactionId(request.transactionId());
+            if (existing.isPresent()) {
+                log.info("Transaction already evaluated; returning cached case flagged={} riskScore={}",
+                        existing.get().isFlagged(), existing.get().getRiskScore());
+                return mapToResponse(existing.get());
+            }
+
+            // Persist transaction
+            TransactionEntity tx = new TransactionEntity();
+            tx.setTransactionId(request.transactionId());
+            tx.setCustomerId(request.customerId());
+            tx.setAmount(request.amount());
+            tx.setCurrency(request.currency());
+            tx.setMerchant(request.merchant());
+            tx.setCategory(request.category());
+            tx.setEventTime(request.eventTime());
+            tx.setRawPayload(toJsonNodeQuietly(request));
+
+            tx = transactionRepository.save(tx);
+
+            // Evaluate rules
+            TransactionEvent event = new TransactionEvent(
+                    request.transactionId(),
+                    request.customerId(),
+                    request.amount(),
+                    request.currency(),
+                    request.merchant(),
+                    request.category(),
+                    request.eventTime()
+            );
+
+            List<RuleHit> hits = rules.stream()
+                    .map(r -> r.evaluate(event))
+                    .flatMap(java.util.Optional::stream)
+                    .toList();
+
+            int riskScore = calculateRiskScore(hits);
+            boolean anyHigh = hits.stream().anyMatch(h -> h.severity() == Severity.HIGH);
+            boolean flagged = isFlagged(anyHigh, riskScore);
+
+            log.info("Evaluation complete flagged={} riskScore={} anyHigh={} ruleHits={}",
+                    flagged, riskScore, anyHigh, hits.stream().map(RuleHit::ruleId).toList());
+
+            // Persist fraud case + hits
+            FraudCaseEntity fraudCase = new FraudCaseEntity();
+            fraudCase.setTransaction(tx);
+            fraudCase.setRiskScore(riskScore);
+            fraudCase.setFlagged(flagged);
+
+            for (RuleHit hit : hits) {
+                RuleHitEntity e = new RuleHitEntity();
+                e.setFraudCase(fraudCase);
+                e.setRuleId(hit.ruleId());
+                e.setRuleVersion(hit.ruleVersion());
+                e.setSeverity(hit.severity().name());
+                e.setReason(hit.reason());
+                e.setMetadata(toJsonNodeQuietly(hit.metadata()));
+                fraudCase.getRuleHits().add(e);
+            }
+
+            fraudCase = fraudCaseRepository.save(fraudCase);
+
+            // Publish event AFTER commit (listener will run after transaction completes)
+            if (flagged) {
+                log.info("Publishing FraudFlaggedEvent");
+                publisher.publishEvent(new FraudFlaggedEvent(
+                        request.transactionId(),
+                        riskScore,
+                        anyHigh,
+                        request.customerId(),
+                        request.merchant(),
+                        request.currency(),
+                        request.amount(),
+                        request.eventTime(),
+                        hits.stream().map(RuleHit::ruleId).toList()
+                ));
+            }
+
+            return mapToResponse(fraudCase);
+        } finally {
+            MDC.remove("transactionId");
         }
-
-        // Persist transaction
-        TransactionEntity tx = new TransactionEntity();
-        tx.setTransactionId(request.transactionId());
-        tx.setCustomerId(request.customerId());
-        tx.setAmount(request.amount());
-        tx.setCurrency(request.currency());
-        tx.setMerchant(request.merchant());
-        tx.setCategory(request.category());
-        tx.setEventTime(request.eventTime());
-
-        // store raw payload (nice for debugging/audit)
-        tx.setRawPayload(toJsonNodeQuietly(request));
-
-        tx = transactionRepository.save(tx);
-
-        // Evaluate rules
-        TransactionEvent event = new TransactionEvent(
-                request.transactionId(),
-                request.customerId(),
-                request.amount(),
-                request.currency(),
-                request.merchant(),
-                request.category(),
-                request.eventTime()
-        );
-
-        List<RuleHit> hits = rules.stream()
-                .map(r -> r.evaluate(event))
-                .flatMap(java.util.Optional::stream)
-                .toList();
-
-        int riskScore = calculateRiskScore(hits);
-        boolean flagged = isFlagged(hits, riskScore);
-
-        // Persist fraud case + hits
-        FraudCaseEntity fraudCase = new FraudCaseEntity();
-        fraudCase.setTransaction(tx);
-        fraudCase.setRiskScore(riskScore);
-        fraudCase.setFlagged(flagged);
-
-        // attach hits
-        for (RuleHit hit : hits) {
-            RuleHitEntity e = new RuleHitEntity();
-            e.setFraudCase(fraudCase);
-            e.setRuleId(hit.ruleId());
-            e.setRuleVersion(hit.ruleVersion());
-            e.setSeverity(hit.severity().name());
-            e.setReason(hit.reason());
-
-            e.setMetadata(toJsonNodeQuietly(hit.metadata()));
-            fraudCase.getRuleHits().add(e);
-        }
-
-        fraudCase = fraudCaseRepository.save(fraudCase);
-
-        // Publish event for monitoring/alerting (PagerDuty listener will consume this)
-        if (flagged) {
-            publisher.publishEvent(new FraudFlaggedEvent(
-                request.transactionId(),
-                riskScore,
-                request.customerId(),
-                request.merchant(),
-                request.currency(),
-                request.amount(),
-                request.eventTime(),
-                hits.stream().map(RuleHit::ruleId).toList()
-            ));
-        }
-
-
-        return mapToResponse(fraudCase);
     }
 
     public EvaluateResponse getCaseByTransactionId(String transactionId) {
-        FraudCaseEntity fc = fraudCaseRepository.findByTransaction_TransactionId(transactionId)
-                .orElseThrow(() -> new IllegalArgumentException("Case not found for transactionId=" + transactionId));
-        return mapToResponse(fc);
+        MDC.put("transactionId", transactionId);
+        try {
+            FraudCaseEntity fc = fraudCaseRepository.findByTransaction_TransactionId(transactionId)
+                    .orElseThrow(() -> new IllegalArgumentException("Case not found for transactionId=" + transactionId));
+            return mapToResponse(fc);
+        } finally {
+            MDC.remove("transactionId");
+        }
     }
 
     private int calculateRiskScore(List<RuleHit> hits) {
-        // simple scoring (good enough for assignment; easy to explain in interview)
         int score = 0;
         for (RuleHit h : hits) {
             score += switch (h.severity()) {
@@ -149,8 +164,7 @@ public class FraudEvaluationService {
         return Math.min(score, 100);
     }
 
-    private boolean isFlagged(List<RuleHit> hits, int riskScore) {
-        boolean anyHigh = hits.stream().anyMatch(h -> h.severity() == Severity.HIGH);
+    private boolean isFlagged(boolean anyHigh, int riskScore) {
         return anyHigh || riskScore >= 70;
     }
 
@@ -166,7 +180,6 @@ public class FraudEvaluationService {
                 dtos
         );
     }
-
 
     private JsonNode toJsonNodeQuietly(Object o) {
         try {

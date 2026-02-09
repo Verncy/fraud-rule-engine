@@ -12,13 +12,16 @@ services:
       test: ["CMD-SHELL", "pg_isready -U fraud -d fraud"]
       interval: 5s
       timeout: 3s
-      retries: 0
+      retries: 20
     volumes:
       - fraud_pgdata:/var/lib/postgresql/data
-  app:
 
-    image: fraud-rule-engine:local
+  app:
     container_name: fraud-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fraud-rule-engine:local
     depends_on:
       db:
         condition: service_healthy
@@ -27,6 +30,12 @@ services:
       SPRING_DATASOURCE_USERNAME: fraud
       SPRING_DATASOURCE_PASSWORD: fraud
       SPRING_FLYWAY_ENABLED: "true"
+
+      ALERT_ENABLED: "true"
+      ALERT_PROVIDER: "WEBHOOK"
+      ALERT_WEBHOOK_URL: "https://webhook.site/be3ed73b-430c-4212-b08d-da58503217a3"
+      ALERT_SOURCE: "fraud-rule-engine"
+      ALERT_SEVERITY_HIGH: "critical"
     ports:
       - "8081:8080"
     restart: unless-stopped

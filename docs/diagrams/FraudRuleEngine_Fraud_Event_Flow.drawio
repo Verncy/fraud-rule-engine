@@ -1,0 +1,43 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.3.6 Chrome/140.0.7339.249 Electron/38.8.0 Safari/537.36" version="29.3.6">
+  <diagram name="Fraud Event Flow" id="0">
+    <mxGraphModel dx="1042" dy="626" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="tx" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Transaction Event" vertex="1">
+          <mxGeometry height="30" width="106" x="14" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="rules" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Fraud Rules Evaluation" vertex="1">
+          <mxGeometry height="30" width="140" x="180" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="score" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Risk Score + Flag Decision" vertex="1">
+          <mxGeometry height="30" width="150" x="380" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="event" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="FraudFlaggedEvent" vertex="1">
+          <mxGeometry height="30" width="140" x="610" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="listener" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="FraudFlaggedListener" vertex="1">
+          <mxGeometry height="30" width="140" x="610" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="monitor" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="MonitoringClient → Webhook" vertex="1">
+          <mxGeometry height="30" width="180" x="360" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="f1" edge="1" parent="1" source="tx" style="endArrow=block;" target="rules">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f2" edge="1" parent="1" source="rules" style="endArrow=block;" target="score">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f3" edge="1" parent="1" source="score" style="endArrow=block;" target="event">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f4" edge="1" parent="1" source="event" style="endArrow=block;" target="listener">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="f5" edge="1" parent="1" source="listener" style="endArrow=block;" target="monitor">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

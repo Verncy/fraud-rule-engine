@@ -6,6 +6,7 @@ import java.util.List;
 public record FraudFlaggedEvent(
         String transactionId,
         int riskScore,
+        boolean anyHigh,
         String customerId,
         String merchant,
         String currency,

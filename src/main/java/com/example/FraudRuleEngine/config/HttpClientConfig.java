@@ -8,9 +8,7 @@ import org.springframework.web.client.RestClient;
 public class HttpClientConfig {
 
     @Bean
-    public RestClient pagerDutyRestClient(RestClient.Builder builder) {
-        return builder
-                .baseUrl("https://events.pagerduty.com")
-                .build();
+    public RestClient restClient(RestClient.Builder builder) {
+        return builder.build();
     }
 }
