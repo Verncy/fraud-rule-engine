@@ -121,14 +121,14 @@ The system is designed to remain stateless at the application layer to support h
 
 ```mermaid
 flowchart LR
-  C[API Client] -->|POST /v1/transactions/evaluate| API[REST Controller]
-  API --> S[FraudEvaluationService]
-  S --> R[Rules Engine]
-  S --> DB[(PostgreSQL)]
-  S -->|publish FraudFlaggedEvent (flagged only)| EVT[(Spring Events)]
-  EVT --> L[FraudFlaggedListener]
-  L --> M[MonitoringClient]
-  M -->|WEBHOOK/SLACK/PAGERDUTY| EXT[External alerting endpoint]
+    C[API Client] -->|POST /v1/transactions/evaluate| API[REST Controller]
+    API --> S[FraudEvaluationService]
+    S --> R[Rules Engine]
+    S --> DB[(PostgreSQL)]
+    S -->|Publish FraudFlaggedEvent - flagged only| EVT[Spring Events]
+    EVT --> L[FraudFlaggedListener]
+    L --> M[MonitoringClient]
+    M -->|WEBHOOK / SLACK / PAGERDUTY| EXT[External Alerting Endpoint]
 ```
 
 Each transaction is persisted first, then evaluated.  
